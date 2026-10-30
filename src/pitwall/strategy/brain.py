@@ -15,11 +15,12 @@ from .types import RaceState, Recommendation
 
 
 class StrategyBrain:
-    def __init__(self, track: TrackConfig, practice: LapTable, driver: str):
+    def __init__(self, track: TrackConfig, practice: LapTable, driver: str, prior: LapTable | None = None):
         self.track, self.driver = track, driver
         self.sc_model = SafetyCarModel.pretrained(track)
         self._tables = [practice]
-        self.tyre = TyreDegModel().fit(practice)
+        self.prior = prior
+        self.tyre = TyreDegModel().fit(practice, prior=prior)
         self.cusum = CusumDetector()
         self.last_residual = 0.0
 
@@ -39,7 +40,7 @@ class StrategyBrain:
         if len(table):
             self._tables.append(table)
         if refit:
-            self.tyre = TyreDegModel().fit(LapTable.concat(self._tables))
+            self.tyre = TyreDegModel().fit(LapTable.concat(self._tables), prior=self.prior)
             if self.cusum.alarm:
                 # model has absorbed the new data: re-arm to flag the next surprise
                 self.cusum.reset()

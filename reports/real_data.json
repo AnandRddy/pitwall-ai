@@ -1,0 +1,91 @@
+{
+  "years": [
+    2023,
+    2024
+  ],
+  "races_loaded": 46,
+  "races_usable": 36,
+  "excluded": {
+    "red_flag": 7,
+    "wet": 5
+  },
+  "tyre_forecast": {
+    "all": {
+      "n_laps": 16353,
+      "mae_baseline_s": 0.6505359227399244,
+      "mae_model_race_only_s": 0.6905730832852365,
+      "mae_model_with_history_s": 0.5051447000061086,
+      "improvement_vs_baseline_pct": 22.349453373990137
+    },
+    "by_origin": {
+      "15": {
+        "n_laps": 5441,
+        "mae_baseline_s": 0.6270747733392396,
+        "mae_model_race_only_s": 0.8908645774093756,
+        "mae_model_with_history_s": 0.5044548167356417,
+        "improvement_vs_baseline_pct": 19.554279938679976
+      },
+      "25": {
+        "n_laps": 5563,
+        "mae_baseline_s": 0.647598843329436,
+        "mae_model_race_only_s": 0.6087665282011661,
+        "mae_model_with_history_s": 0.5146032495516225,
+        "improvement_vs_baseline_pct": 20.536725033981895
+      },
+      "35": {
+        "n_laps": 5349,
+        "mae_baseline_s": 0.677455176179759,
+        "mae_model_race_only_s": 0.5719161093467889,
+        "mae_model_with_history_s": 0.496009486649017,
+        "improvement_vs_baseline_pct": 26.78342359917203
+      }
+    },
+    "extrapolating_unseen_ages": {
+      "n_laps": 42,
+      "mae_baseline_s": 0.495585902949014,
+      "mae_model_race_only_s": 0.8738128215562775,
+      "mae_model_with_history_s": 0.38972581868030226,
+      "improvement_vs_baseline_pct": 21.360592308777328
+    },
+    "within_seen_ages": {
+      "n_laps": 16311,
+      "mae_baseline_s": 0.6509349112036127,
+      "mae_model_race_only_s": 0.690101250227338,
+      "mae_model_with_history_s": 0.505441897787709,
+      "improvement_vs_baseline_pct": 22.351391961276057
+    },
+    "n_races": 22
+  },
+  "sc_hazard": {
+    "n_races": 39,
+    "observed_races_with_sc": 0.41025641025641024,
+    "mean_predicted_p_any_sc": 0.4180244105562761,
+    "logloss_model": 0.050470321001315065,
+    "logloss_constant_rate": 0.05398528671172572,
+    "brier_race_level_model": 0.23287727950985174,
+    "brier_race_level_constant": 0.24194608809993431,
+    "first_laps_sc_rate": 0.1282051282051282
+  },
+  "pit_loss": {
+    "n_green_stops": 1063,
+    "n_sc_stops": 100,
+    "median_pit_loss_green_s": 22.732,
+    "median_pit_loss_under_sc_s": 15.31649999999997,
+    "sc_discount_ratio": 0.6737858525426698,
+    "simulator_default": {
+      "pit_loss_s": 22.7,
+      "sc_pit_factor": 0.67
+    }
+  },
+  "shadow_replay": {
+    "origin_lap": 18,
+    "n_driver_plans": 516,
+    "n_races": 20,
+    "median_gap_to_optimum_s": 6.763418606657069,
+    "mean_gap_to_optimum_s": 10.916448063891938,
+    "share_within_1s_of_optimum": 0.12209302325581395,
+    "median_abs_first_stop_diff_laps": 6.0,
+    "spearman_plan_gap_vs_places_gained": 0.043242424096850675,
+    "note": "gap is estimated by PitWall's own model; spearman uses real finishing positions (negative = drivers with bigger estimated gaps gained fewer places)"
+  }
+}

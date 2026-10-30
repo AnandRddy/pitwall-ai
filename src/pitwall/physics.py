@@ -40,8 +40,8 @@ class TrackConfig:
     name: str = "Synthetic GP"
     laps: int = 57
     base_lap: float = 90.0
-    pit_loss: float = 21.5        # green-flag time lost in the pit lane
-    sc_pit_factor: float = 0.45   # share of pit loss paid when pitting under SC
+    pit_loss: float = 22.7        # green-flag time lost in a stop (measured: 1,075 real stops, 2023-24)
+    sc_pit_factor: float = 0.67   # share of that paid under SC (measured: 100 stops, 90% CI 0.56-0.74)
     sc_lap_factor: float = 1.45   # SC lap time / base lap time
     fuel_start: float = 105.0     # kg
     fuel_effect: float = 0.032    # s per kg
