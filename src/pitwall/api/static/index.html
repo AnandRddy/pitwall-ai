@@ -39,6 +39,7 @@ th{color:var(--mut);font-weight:500;font-size:12px}tr.best td{color:var(--grn);f
   <span id="realopts"><label>year <input id="year" type="number" value="2023" style="width:70px"></label>
   <label>race <input id="gp" value="Azerbaijan" style="width:110px"></label>
   <label>driver <input id="drv" placeholder="auto" style="width:60px"></label></span>
+  <label title="Fast-forward to this lap, e.g. to line the replay up with a video">start lap <input id="startlap" type="number" value="1" min="1" style="width:60px"></label>
   <label id="seedl" style="display:none">seed <input id="seed" type="number" value="7" style="width:70px"></label>
   <label>speed <input id="speed" type="number" value="3" min="0.5" max="20" step="0.5" style="width:70px"></label>
   <label><input id="rain" type="checkbox"> rain risk</label>
@@ -108,7 +109,7 @@ $('go').onclick=()=>{$('status').textContent='loading...';if(ws)ws.close();H=[];
  const p=location.protocol==='https:'?'wss':'ws';
  const real=$('src').value==='real';
  const q=real?`year=${$('year').value}&gp=${encodeURIComponent($('gp').value)}&driver=${encodeURIComponent($('drv').value.toUpperCase())}`:`seed=${$('seed').value}`;
- ws=new WebSocket(`${p}://${location.host}/ws/live?${q}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
+ ws=new WebSocket(`${p}://${location.host}/ws/live?${q}&start=${parseInt($('startlap').value)||1}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
  ws.onopen=()=>$('status').textContent='connecting';
  ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='error'){$('status').textContent='error';$('call').textContent=d.message;return}
   if(d.type==='hello'){$('srcb').textContent=d.source+' | driver '+d.driver;ME=d.driver;OUT=d.outline;FR=null;$('mapnote').textContent=d.outline?'(real GPS, red = your car, gold = leader)':'(GPS only for real races)';$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}

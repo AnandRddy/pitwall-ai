@@ -60,3 +60,11 @@ def test_backtest_runs_and_reports_paired_metrics():
     assert out["all"]["n"] == 4
     for k in ("adaptive_vs_static_s", "adaptive_vs_template_s", "static_vs_template_s"):
         assert abs(out["all"][k]) < 120  # finite and plausible; gains are measured in the 200-race run
+
+
+def test_skip_to_fast_forwards_then_continues_from_the_next_lap():
+    s = ReplaySession(seed=7)
+    s.skip_to(20)
+    assert s.lap == 20 and s.brain.tyre.fitted
+    p = s.step()
+    assert p["lap"] == 21 and p["rec"]["plans"]

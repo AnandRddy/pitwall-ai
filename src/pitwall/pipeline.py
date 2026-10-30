@@ -88,6 +88,24 @@ class ReplaySession:
             self.brain.cusum.alarm = self.brain.cusum.s > self.brain.cusum.h
         return ev
 
+    def skip_to(self, n: int) -> None:
+        """Fast-forward to just after lap `n`: the brain learns those laps (one refit) but no
+        recommendations are computed. Used to line the replay up with a video."""
+        r, tr, i = self.race, self.track, self.race.idx(self.driver)
+        tables = []
+        for lap in range(self.lap + 1, min(n, tr.laps - 1) + 1):
+            j = lap - 1
+            c, a, f, lt = int(r.compound[i, j]), int(r.tyre_age[i, j]), float(r.fuel[i, j]), float(r.lap_time[i, j])
+            have = bool(np.isfinite(lt) and c >= 0 and 0.93 * tr.base_lap < lt < 1.07 * tr.base_lap)
+            self.brain.observe_own_lap(max(c, 0), a, f, lt, bool(
+                have and not r.sc[j] and not r.pit_in[i, j] and a > 1 and lap > 1))
+            if r.pit_in[i, j]:
+                self.brain.on_pit()
+            t = r.table_for_lap(lap)
+            tables.append(t.mask((t.lap_time > 0.93 * tr.base_lap) & (t.lap_time < 1.07 * tr.base_lap)))
+            self.lap = lap
+        self.brain.ingest(LapTable.concat(tables))
+
     def step(self) -> dict:
         """Advance one lap and return the full pit-wall payload."""
         r, tr = self.race, self.track

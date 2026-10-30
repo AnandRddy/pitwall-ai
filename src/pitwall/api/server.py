@@ -57,7 +57,7 @@ def races(year: int = 2024):
 
 @app.websocket("/ws/live")
 async def live(ws: WebSocket, seed: int = 7, speed: float = 2.0, rain: float = 0.0,
-               year: int | None = None, gp: str | None = None, driver: str | None = None):
+               year: int | None = None, gp: str | None = None, driver: str | None = None, start: int = 1):
     await ws.accept()
     try:
         session = await asyncio.to_thread(
@@ -67,6 +67,8 @@ async def live(ws: WebSocket, seed: int = 7, speed: float = 2.0, rain: float = 0
         await ws.send_json({"type": "error", "message": f"Could not load race: {e}"})
         await ws.close()
         return
+    if start > 1:
+        await asyncio.to_thread(session.skip_to, start - 1)
     engineer, llm = make_engineer(session)
     fallback = RuleEngineer()
     await ws.send_json({"type": "hello", "llm": llm, "track": session.track.name, "laps": session.track.laps,
