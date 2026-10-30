@@ -43,6 +43,17 @@ python -m pitwall.evaluation.real_data --years 2023 2024          # real-race va
 
 Optional: `pip install -e ".[llm]"` and set `ANTHROPIC_API_KEY` for the Claude engineer; Real races load from the open OpenF1 API (`pitwall.data.openf1_loader.load_race(2024, "Bahrain")`, no key needed); a FastF1 loader is also included but FastF1 now requires a Formula 1 account. Docker: `docker build -t pitwall . && docker run -p 8000:8000 pitwall`.
 
+## Live on real races
+
+The dashboard can replay any 2023-24 race from the open OpenF1 API, lap by lap, as if the data were arriving live:
+
+- **Pick a race, year and driver**, and optionally a **start lap** to fast-forward (handy for lining up with a video). The model starts knowing only *earlier* races, then learns each lap as it arrives, so there is no look-ahead except the "safety car deployed" notice a real pit wall receives.
+- **GPS race replay**: all 20 cars animated around the real circuit from OpenF1 position data (your car in red, the leader in gold), in step with the strategy feed.
+- **Race video panel**: paste a YouTube link (e.g. highlights) to watch alongside. The official broadcast is copyrighted, so it is embedded from a link you supply, not downloaded; it is not lap-synced.
+- **Raw-data explorer**: [`docs/real_race.html`](docs/real_race.html) shows one real race's tyre stints, lap times and the exact rows the models receive (regenerate any race with `python scripts/real_data_view.py 2024 Monaco docs/monaco.html`).
+
+First load of a race downloads and caches its laps and GPS (about a minute); after that it starts instantly.
+
 ## Results
 
 ### A. Validated on real races (OpenF1, 2023-24)
