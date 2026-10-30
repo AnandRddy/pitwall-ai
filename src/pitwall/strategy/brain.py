@@ -50,6 +50,6 @@ class StrategyBrain:
     def recommend(self, state: RaceState, **kw) -> Recommendation:
         return optimize(state, self.tyre, self.sc_model, self.track, **kw)
 
-    def curves(self, max_age: int = 45) -> dict:
+    def curves(self, max_age: int = 35) -> dict:
         return {c: [round(float(v), 3) for v in self.tyre.curves[i][: max_age + 1]]
                 for i, c in enumerate(COMPOUNDS)}

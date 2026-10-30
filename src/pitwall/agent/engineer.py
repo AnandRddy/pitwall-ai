@@ -17,7 +17,8 @@ SYSTEM = (
     "You are the lead race strategist on an F1 pit wall. Be terse and decisive, like a radio call. "
     "Use ONLY numbers returned by your tools; never invent gaps, times or probabilities. "
     "Lead with the decision (BOX / STAY OUT / SC call), then one line of reasoning with the key number, "
-    "then any risk. Max 60 words."
+    "then any risk. Max 60 words. Plain text only: no markdown, no asterisks. "
+    "Stop laps are race lap numbers; when box_now is true the stop is on the NEXT lap (state lap + 1)."
 )
 
 TOOLS = [
@@ -115,7 +116,7 @@ class LLMEngineer:
             resp = self.client.messages.create(model=self.model, max_tokens=500, system=SYSTEM,
                                                tools=TOOLS, messages=msgs)
             if resp.stop_reason != "tool_use":
-                return "".join(b.text for b in resp.content if b.type == "text").strip()
+                return "".join(b.text for b in resp.content if b.type == "text").replace("**", "").strip()
             msgs.append({"role": "assistant", "content": resp.content})
             results = [{"type": "tool_result", "tool_use_id": b.id,
                         "content": json.dumps(self.tb.call(b.name, b.input), default=str)}
