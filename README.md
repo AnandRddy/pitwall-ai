@@ -1,5 +1,7 @@
 # PitWall AI
 
+[![ci](https://github.com/AnandRddy/pitwall-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/AnandRddy/pitwall-ai/actions/workflows/ci.yml)
+
 **A real-time race-strategy engine for Formula 1 pit walls**: it learns tyre behaviour live, simulates thousands of race futures per lap, and tells the strategist *box or stay out*, with the probability and the cost of being wrong. A tool-using LLM race engineer turns those numbers into radio calls.
 
 ```
