@@ -47,13 +47,30 @@ def strategy(seed: int = 7, lap: int = 0):
     return payload
 
 
+@app.get("/api/races")
+def races(year: int = 2024):
+    """Real races available from OpenF1 for the dashboard's race picker."""
+    from ..data.openf1_loader import list_races
+    return [{"name": f"{r['country_name']} ({r['circuit_short_name']})", "key": r["country_name"],
+             "date": r["date_start"][:10]} for r in list_races(year)]
+
+
 @app.websocket("/ws/live")
-async def live(ws: WebSocket, seed: int = 7, speed: float = 2.0, rain: float = 0.0):
+async def live(ws: WebSocket, seed: int = 7, speed: float = 2.0, rain: float = 0.0,
+               year: int | None = None, gp: str | None = None, driver: str | None = None):
     await ws.accept()
-    session = ReplaySession(seed=seed, rain=rain)
+    try:
+        session = await asyncio.to_thread(
+            lambda: ReplaySession(seed=seed, rain=rain, year=year, gp=gp, driver=driver) if year
+            else ReplaySession(seed=seed, rain=rain))
+    except Exception as e:
+        await ws.send_json({"type": "error", "message": f"Could not load race: {e}"})
+        await ws.close()
+        return
     engineer, llm = make_engineer(session)
     fallback = RuleEngineer()
-    await ws.send_json({"type": "hello", "llm": llm, "track": session.track.name, "laps": session.track.laps})
+    await ws.send_json({"type": "hello", "llm": llm, "track": session.track.name, "laps": session.track.laps,
+                        "source": session.source, "driver": session.driver, "drivers": session.race.drivers})
     pending: list[str] = []
 
     async def listen():

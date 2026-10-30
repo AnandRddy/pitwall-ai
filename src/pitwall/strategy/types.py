@@ -64,5 +64,5 @@ class Recommendation:
     def to_dict(self) -> dict:
         return {"plans": [p.to_dict() for p in self.plans[:5]], "box_now": self.box_now,
                 "next_stop_lap": self.next_stop_lap, "next_compound": self.next_compound,
-                "pit_now_cost": round(self.pit_now_cost, 2), "n_evaluated": self.n_evaluated,
+                "pit_now_cost": round(self.pit_now_cost, 2) if self.pit_now_cost != float("inf") else None, "n_evaluated": self.n_evaluated,
                 "elapsed_ms": round(self.elapsed_ms, 1), "notes": self.notes}

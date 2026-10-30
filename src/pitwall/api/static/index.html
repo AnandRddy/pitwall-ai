@@ -12,7 +12,7 @@ header{display:flex;gap:16px;align-items:center;padding:12px 20px;border-bottom:
 h1{font-size:18px;margin:0;letter-spacing:.08em}h1 b{color:var(--red)}
 .badge{padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mut);font-size:12px}
 .badge.on{color:var(--grn);border-color:var(--grn)}
-button,input{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit}
+button,input,select{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit}
 button{cursor:pointer}button:hover{border-color:var(--red)}
 main{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:14px 20px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
@@ -33,9 +33,13 @@ th{color:var(--mut);font-weight:500;font-size:12px}tr.best td{color:var(--grn);f
 <header>
   <h1>PITWALL<b>.AI</b></h1>
   <span class="badge" id="eng">rule engineer</span>
-  <span class="badge" id="status">idle</span>
+  <span class="badge" id="status">idle</span><span class="badge" id="srcb"></span>
   <span style="flex:1"></span>
-  <label>seed <input id="seed" type="number" value="7" style="width:70px"></label>
+  <label>data <select id="src"><option value="real">Real race</option><option value="sim">Simulator</option></select></label>
+  <span id="realopts"><label>year <input id="year" type="number" value="2023" style="width:70px"></label>
+  <label>race <input id="gp" value="Azerbaijan" style="width:110px"></label>
+  <label>driver <input id="drv" placeholder="auto" style="width:60px"></label></span>
+  <label id="seedl" style="display:none">seed <input id="seed" type="number" value="7" style="width:70px"></label>
   <label>speed <input id="speed" type="number" value="3" min="0.5" max="20" step="0.5" style="width:70px"></label>
   <label><input id="rain" type="checkbox"> rain risk</label>
   <button id="go">Start live replay</button>
@@ -76,7 +80,7 @@ function chart(cv,series,opts={}){const r=devicePixelRatio||1,w=cv.clientWidth,h
  series.forEach(s=>{g.strokeStyle=s.c;g.lineWidth=s.w||2;g.setLineDash(s.dash||[]);g.beginPath();s.pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.stroke();
   (s.marks||[]).forEach(m=>{g.fillStyle=m.c;g.beginPath();g.arc(X(m.x),Y(m.y),4,0,7);g.fill()})});g.setLineDash([])}
 function draw(){
- const lt=H.filter(d=>d.sc===false&&!d.pitted&&d.lap>1);
+ const lt=H.filter(d=>d.sc===false&&!d.pitted&&d.lap>1&&d.lap_time!=null&&d.lap_time<d.predicted*1.08);
  chart($('c1'),[{pts:lt.map(d=>[d.lap,d.lap_time]),c:css('--blu')},{pts:lt.map(d=>[d.lap,d.predicted]),c:css('--yel'),dash:[5,4],w:1.5}],{pad:.3});
  const L=H[H.length-1];if(!L)return;const ser=Object.keys(L.curves).map(k=>({pts:L.curves[k].map((v,i)=>[i,v]).slice(1),c:COL[k]}));
  chart($('c2'),ser,{y0:0,pad:.5});}
@@ -88,16 +92,20 @@ function onLap(d){H.push(d);$('lap').textContent=d.lap+'/'+d.total;$('pos').text
  $('scp').textContent=Math.round(d.sc_prob_5*100)+'%';$('cus').style.width=Math.min(100,d.cusum/.9*100)+'%';$('cus').style.background=d.cliff_alarm?css('--red'):css('--yel');
  const c=$('call');c.textContent=d.radio_call;c.className='call'+(d.sc?' sc':'')+(d.rec&&d.rec.box_now?' box':'');
  if(d.rec){$('plans').innerHTML=d.rec.plans.map((p,i)=>`<tr class="${i?'':'best'}"><td>${p.label}</td><td>${p.delta.toFixed(2)}</td><td>${(p.p_best*100).toFixed(0)}%</td><td>${(p.p90-p.p10).toFixed(0)}</td></tr>`).join('');
-  $('meta').textContent=`${d.rec.n_evaluated.toLocaleString()} strategies searched in ${d.rec.elapsed_ms.toFixed(0)} ms | cost of boxing next lap: ${isFinite(d.rec.pit_now_cost)?d.rec.pit_now_cost.toFixed(2)+'s':'n/a'}`}
+  $('meta').textContent=`${d.rec.n_evaluated.toLocaleString()} strategies searched in ${d.rec.elapsed_ms.toFixed(0)} ms | cost of boxing next lap: ${d.rec.pit_now_cost!=null?d.rec.pit_now_cost.toFixed(2)+'s':'n/a'}`}
  $('uc').textContent=d.undercut?`${d.undercut.rival}: ${d.undercut.gap.toFixed(1)}s ahead - undercut ${Math.round(d.undercut.p_success*100)}% on ${d.undercut.compound}. ${d.undercut.recommended?'GO.':'Not worth it.'}`:'No rival in range.';
  if(d.driver_radio)log('DRIVER L'+d.lap+': '+d.driver_radio,'d');
  if(d.sc||d.cliff_alarm||(d.rec&&d.rec.box_now)||d.driver_radio)log('L'+d.lap+' PITWALL: '+d.radio_call);
  draw()}
-$('go').onclick=()=>{if(ws)ws.close();H=[];$('log').innerHTML='';$('plans').innerHTML='';
+$('src').onchange=()=>{const r=$('src').value==='real';$('realopts').style.display=r?'':'none';$('seedl').style.display=r?'none':''};
+$('go').onclick=()=>{$('status').textContent='loading...';if(ws)ws.close();H=[];$('log').innerHTML='';$('plans').innerHTML='';
  const p=location.protocol==='https:'?'wss':'ws';
- ws=new WebSocket(`${p}://${location.host}/ws/live?seed=${$('seed').value}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
+ const real=$('src').value==='real';
+ const q=real?`year=${$('year').value}&gp=${encodeURIComponent($('gp').value)}&driver=${encodeURIComponent($('drv').value.toUpperCase())}`:`seed=${$('seed').value}`;
+ ws=new WebSocket(`${p}://${location.host}/ws/live?${q}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
  ws.onopen=()=>$('status').textContent='connecting';
- ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='hello'){$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}
+ ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='error'){$('status').textContent='error';$('call').textContent=d.message;return}
+  if(d.type==='hello'){$('srcb').textContent=d.source+' | driver '+d.driver;$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}
   else if(d.type==='lap')onLap(d);else if(d.type==='done'){$('status').textContent='finished';$('status').className='badge'}};
  ws.onclose=()=>{if($('status').textContent==='live')$('status').textContent='closed'}};
 const send=()=>{const t=$('msg').value.trim();if(t&&ws&&ws.readyState===1){ws.send(JSON.stringify({radio:t}));log('DRIVER (queued): '+t,'d');$('msg').value=''}};

@@ -86,8 +86,9 @@ class RuleEngineer:
         elif rec["box_now"]:
             parts.append(f"BOX THIS LAP, {rec['next_compound']}s. Plan {best['label']}, {best['p_best']:.0%} best.")
         elif best["stops"]:
-            parts.append(f"Stay out. Target L{rec['next_stop_lap']} for {rec['next_compound']}s; "
-                         f"boxing now costs {rec['pit_now_cost']:.1f}s.")
+            cost = rec["pit_now_cost"]
+            parts.append(f"Stay out. Target L{rec['next_stop_lap']} for {rec['next_compound']}s"
+                         + (f"; boxing now costs {cost:.1f}s." if cost is not None else "."))
         else:
             parts.append("Stay out, no further stop needed.")
         if payload["cliff_alarm"]:

@@ -6,7 +6,9 @@ learns from every lap and flags where it would have decided differently.
 from __future__ import annotations
 
 from .agent.radio import RadioEvent, parse_radio
-from .data.schema import Race
+import numpy as np
+
+from .data.schema import LapTable, Race
 from .data.simulator import simulate_practice, simulate_race
 from .physics import COMPOUNDS, TrackConfig
 from .strategy.brain import StrategyBrain
@@ -17,15 +19,45 @@ OUR_PLAN = ("MEDIUM", ((26, "HARD"),))  # conventional 1-stop template the car a
 
 
 class ReplaySession:
-    def __init__(self, seed: int = 7, driver: str = "CAR07", rain: float = 0.0, fast: bool = True):
-        self.track = TrackConfig()
+    def __init__(self, seed: int = 7, driver: str = "CAR07", rain: float = 0.0, fast: bool = True,
+                 year: int | None = None, gp: str | None = None):
         self.driver, self.rain, self.fast = driver, rain, fast
-        self.race, self.true_base = simulate_race(self.track, seed=seed, rain=rain, plans={driver: OUR_PLAN})
-        self.brain = StrategyBrain(self.track, simulate_practice(self.track, self.true_base, seed), driver)
+        self.real, self.shift, self.source = year is not None, 0.0, "simulator"
+        if self.real:
+            self._init_real(year, gp, driver)
+        else:
+            self.track = TrackConfig()
+            self.race, self.true_base = simulate_race(self.track, seed=seed, rain=rain, plans={driver: OUR_PLAN})
+            self.brain = StrategyBrain(self.track, simulate_practice(self.track, self.true_base, seed), driver)
         self.lap = 0
         self.radio: list[RadioEvent] = []
         self.last_rec = None
         self.last_undercut = None
+
+    def _init_real(self, year: int, gp: str, driver: str | None):
+        """Real race from OpenF1. The brain starts knowing only earlier races (the team's history)."""
+        from .data.openf1_loader import list_races, load_race
+        from .evaluation.real_data import clean_table
+        race, meta = load_race(year, gp)
+        date = next(s["date_start"] for s in list_races(year) if s["session_key"] == meta.session_key)
+        prev = []
+        for y in (year - 1, year):
+            for sess in list_races(y):
+                if sess["date_start"] < date:
+                    try:
+                        r, m = load_race(session=sess, year=y)
+                    except Exception:
+                        continue
+                    if m.usable:
+                        prev.append(r)
+        prior = LapTable.concat([clean_table(r, 2, r.n_laps) for r in prev[-4:]])
+        if driver not in race.drivers:   # default: a driver who finished mid-pack with a real strategy
+            finish = np.argsort(race.position[:, -1])
+            driver = race.drivers[int(finish[min(5, len(finish) - 1)])]
+        self.driver, self.race, self.track = driver, race, race.track
+        self.shift, self.source = meta.real_base_lap - 90.0, f"OpenF1 {meta.name} {meta.year}"
+        self.rain = 0.7 if meta.wet else self.rain
+        self.brain = StrategyBrain(self.track, LapTable.empty(), driver, prior=prior)
 
     @property
     def done(self) -> bool:
@@ -33,7 +65,7 @@ class ReplaySession:
 
     def state(self) -> RaceState:
         r, lap = self.race, self.lap
-        comp, age, used = r.tyre_state(self.driver, lap) if lap else (OUR_PLAN[0], 0, (OUR_PLAN[0],))
+        comp, age, used = r.tyre_state(self.driver, lap)
         sc_rem, since = r.sc_context(lap)
         ga, gb, ahead, behind = r.gaps(self.driver, lap) if lap else (None, None, None, None)
         pos = int(r.position[r.idx(self.driver), lap - 1]) if lap else 1
@@ -54,19 +86,22 @@ class ReplaySession:
         r, tr = self.race, self.track
         self.lap += 1
         lap, j, i = self.lap, self.lap - 1, r.idx(self.driver)
-        clean = bool(not r.sc[j] and not r.pit_in[i, j] and r.tyre_age[i, j] > 1 and lap > 1)
         c, a, f, lt = int(r.compound[i, j]), int(r.tyre_age[i, j]), float(r.fuel[i, j]), float(r.lap_time[i, j])
-        pred = self.brain.predicted(c, a, f)
+        have = bool(np.isfinite(lt) and c >= 0 and 0.93 * tr.base_lap < lt < 1.07 * tr.base_lap)
+        clean = bool(have and not r.sc[j] and not r.pit_in[i, j] and r.tyre_age[i, j] > 1 and lap > 1)
+        pred = self.brain.predicted(max(c, 0), a, f)
         resid = self.brain.observe_own_lap(c, a, f, lt, clean)
         alarm = self.brain.cusum.alarm
         if r.pit_in[i, j]:
             self.brain.on_pit()
-        self.brain.ingest(r.table_for_lap(lap), refit=True)
+        laps_tbl = r.table_for_lap(lap)
+        self.brain.ingest(laps_tbl.mask((laps_tbl.lap_time > 0.93 * tr.base_lap) & (laps_tbl.lap_time < 1.07 * tr.base_lap)))
 
         state = self.state()
-        payload = {"lap": lap, "total": tr.laps, "position": state.position, "lap_time": round(lt, 3),
-                   "predicted": round(pred, 3), "residual": round(resid, 3), "cusum": round(self.brain.cusum.s, 2),
-                   "cliff_alarm": alarm, "compound": COMPOUNDS[c], "tyre_age": a, "sc": bool(r.sc[j]),
+        payload = {"lap": lap, "total": tr.laps, "position": state.position,
+                   "lap_time": round(lt + self.shift, 3) if np.isfinite(lt) else None,
+                   "predicted": round(pred + self.shift, 3), "residual": round(resid, 3), "driver": self.driver, "cusum": round(self.brain.cusum.s, 2),
+                   "cliff_alarm": alarm, "compound": COMPOUNDS[c] if c >= 0 else "UNKNOWN", "tyre_age": a, "sc": bool(r.sc[j]),
                    "pitted": bool(r.pit_in[i, j]), "gap_ahead": state.gap_ahead, "gap_behind": state.gap_behind,
                    "curves": self.brain.curves(), "ours_next": None}
         if not self.done:
