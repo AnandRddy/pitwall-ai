@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PitWall AI</title>
+<style>
+:root{--bg:#0b0d12;--panel:#141821;--line:#232a38;--tx:#e8ecf3;--mut:#8a93a6;--red:#ff2e3b;--grn:#2ee59d;--yel:#ffd23f;--blu:#4cc9f0;
+--S:#ff3b4a;--M:#ffd23f;--H:#e8ecf3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,Segoe UI,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:12px 20px;border-bottom:2px solid var(--red);flex-wrap:wrap}
+h1{font-size:18px;margin:0;letter-spacing:.08em}h1 b{color:var(--red)}
+.badge{padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mut);font-size:12px}
+.badge.on{color:var(--grn);border-color:var(--grn)}
+button,input{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit}
+button{cursor:pointer}button:hover{border-color:var(--red)}
+main{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:14px 20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.card h2{margin:0 0 8px;font-size:12px;letter-spacing:.1em;color:var(--mut);text-transform:uppercase}
+.kpi{grid-column:span 2;text-align:center}.kpi .v{font-size:28px;font-weight:700}.kpi .l{color:var(--mut);font-size:12px}
+.w6{grid-column:span 6}.w4{grid-column:span 4}.w8{grid-column:span 8}.w12{grid-column:span 12}
+canvas{width:100%;height:220px;display:block}
+table{width:100%;border-collapse:collapse}td,th{padding:5px 6px;text-align:left;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th{color:var(--mut);font-weight:500;font-size:12px}tr.best td{color:var(--grn);font-weight:600}
+.call{font-size:17px;font-weight:600;min-height:52px}.call.box{color:var(--red)}.call.sc{color:var(--yel)}
+.log{height:150px;overflow:auto;font-size:13px}.log div{padding:3px 0;border-bottom:1px solid var(--line)}.log .d{color:var(--blu)}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:var(--yel);width:0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+@media(max-width:900px){.kpi{grid-column:span 4}.w6,.w4,.w8{grid-column:span 12}}
+</style>
+</head>
+<body>
+<header>
+  <h1>PITWALL<b>.AI</b></h1>
+  <span class="badge" id="eng">rule engineer</span>
+  <span class="badge" id="status">idle</span>
+  <span style="flex:1"></span>
+  <label>seed <input id="seed" type="number" value="7" style="width:70px"></label>
+  <label>speed <input id="speed" type="number" value="3" min="0.5" max="20" step="0.5" style="width:70px"></label>
+  <label><input id="rain" type="checkbox"> rain risk</label>
+  <button id="go">Start live replay</button>
+</header>
+<main>
+  <div class="card kpi"><div class="v" id="lap">-</div><div class="l">LAP</div></div>
+  <div class="card kpi"><div class="v" id="pos">-</div><div class="l">POSITION</div></div>
+  <div class="card kpi"><div class="v" id="tyre">-</div><div class="l">TYRE / AGE</div></div>
+  <div class="card kpi"><div class="v" id="gap">-</div><div class="l">GAP AHEAD</div></div>
+  <div class="card kpi"><div class="v" id="res">-</div><div class="l">PACE vs MODEL</div></div>
+  <div class="card kpi"><div class="v" id="scp">-</div><div class="l">SC RISK (5 LAPS)</div></div>
+
+  <div class="card w12"><h2>Pit wall call</h2><div class="call" id="call">Press start to begin the replay.</div></div>
+
+  <div class="card w6"><h2>Lap time: actual vs model</h2><canvas id="c1"></canvas></div>
+  <div class="card w6"><h2>Learned tyre curves (s lost vs age)</h2><canvas id="c2"></canvas></div>
+
+  <div class="card w8"><h2>Strategy options (Monte Carlo, shared scenarios)</h2>
+    <table><thead><tr><th>Plan</th><th>Delta s</th><th>P(best)</th><th>P10-P90 spread s</th></tr></thead><tbody id="plans"></tbody></table>
+    <div style="margin-top:8px;color:var(--mut)" id="meta"></div></div>
+  <div class="card w4"><h2>Undercut / risk</h2><div id="uc" style="min-height:48px;color:var(--mut)">No rival in range.</div>
+    <div class="bar" style="margin:10px 0 4px"><i id="cus"></i></div><div style="font-size:12px;color:var(--mut)">Tyre-cliff CUSUM</div></div>
+
+  <div class="card w12"><h2>Radio</h2><div class="log" id="log"></div>
+    <div style="display:flex;gap:8px;margin-top:8px"><input id="msg" placeholder='Driver radio, e.g. "Rear left is gone, no grip"' style="flex:1"><button id="send">Send</button></div></div>
+</main>
+<script>
+const COL={SOFT:'#ff3b4a',MEDIUM:'#ffd23f',HARD:'#e8ecf3'};
+const $=id=>document.getElementById(id);let ws,H=[];
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v)}
+function chart(cv,series,opts={}){const r=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;cv.width=w*r;cv.height=h*r;
+ const g=cv.getContext('2d');g.scale(r,r);g.clearRect(0,0,w,h);const P=34;let xs=[],ys=[];
+ series.forEach(s=>s.pts.forEach(p=>{xs.push(p[0]);ys.push(p[1])}));if(!xs.length)return;
+ const x0=Math.min(...xs),x1=Math.max(...xs),y0=opts.y0??Math.min(...ys),y1=Math.max(...ys)+(opts.pad||0.2);
+ const X=x=>P+(x-x0)/(x1-x0||1)*(w-P-8),Y=y=>h-20-(y-y0)/(y1-y0||1)*(h-30);
+ g.strokeStyle=css('--line');g.fillStyle=css('--mut');g.font='11px sans-serif';
+ for(let i=0;i<=4;i++){const y=y0+(y1-y0)*i/4;g.beginPath();g.moveTo(P,Y(y));g.lineTo(w-8,Y(y));g.stroke();g.fillText(y.toFixed(1),2,Y(y)+4)}
+ series.forEach(s=>{g.strokeStyle=s.c;g.lineWidth=s.w||2;g.setLineDash(s.dash||[]);g.beginPath();s.pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.stroke();
+  (s.marks||[]).forEach(m=>{g.fillStyle=m.c;g.beginPath();g.arc(X(m.x),Y(m.y),4,0,7);g.fill()})});g.setLineDash([])}
+function draw(){
+ const lt=H.filter(d=>d.sc===false&&!d.pitted&&d.lap>1);
+ chart($('c1'),[{pts:lt.map(d=>[d.lap,d.lap_time]),c:css('--blu')},{pts:lt.map(d=>[d.lap,d.predicted]),c:css('--yel'),dash:[5,4],w:1.5}],{pad:.3});
+ const L=H[H.length-1];if(!L)return;const ser=Object.keys(L.curves).map(k=>({pts:L.curves[k].map((v,i)=>[i,v]).slice(1),c:COL[k]}));
+ chart($('c2'),ser,{y0:0,pad:.5});}
+function log(t,c=''){const d=document.createElement('div');d.className=c;d.textContent=t;$('log').prepend(d)}
+function onLap(d){H.push(d);$('lap').textContent=d.lap+'/'+d.total;$('pos').textContent='P'+d.position;
+ $('tyre').innerHTML='<span class="dot" style="background:'+COL[d.compound]+'"></span>'+d.compound[0]+' '+d.tyre_age;
+ $('gap').textContent=d.gap_ahead==null?'-':d.gap_ahead.toFixed(1)+'s';
+ $('res').textContent=(d.residual>=0?'+':'')+d.residual.toFixed(2)+'s';$('res').style.color=d.residual>.4?css('--red'):'';
+ $('scp').textContent=Math.round(d.sc_prob_5*100)+'%';$('cus').style.width=Math.min(100,d.cusum/.9*100)+'%';$('cus').style.background=d.cliff_alarm?css('--red'):css('--yel');
+ const c=$('call');c.textContent=d.radio_call;c.className='call'+(d.sc?' sc':'')+(d.rec&&d.rec.box_now?' box':'');
+ if(d.rec){$('plans').innerHTML=d.rec.plans.map((p,i)=>`<tr class="${i?'':'best'}"><td>${p.label}</td><td>${p.delta.toFixed(2)}</td><td>${(p.p_best*100).toFixed(0)}%</td><td>${(p.p90-p.p10).toFixed(0)}</td></tr>`).join('');
+  $('meta').textContent=`${d.rec.n_evaluated.toLocaleString()} strategies searched in ${d.rec.elapsed_ms.toFixed(0)} ms | cost of boxing next lap: ${isFinite(d.rec.pit_now_cost)?d.rec.pit_now_cost.toFixed(2)+'s':'n/a'}`}
+ $('uc').textContent=d.undercut?`${d.undercut.rival}: ${d.undercut.gap.toFixed(1)}s ahead - undercut ${Math.round(d.undercut.p_success*100)}% on ${d.undercut.compound}. ${d.undercut.recommended?'GO.':'Not worth it.'}`:'No rival in range.';
+ if(d.driver_radio)log('DRIVER L'+d.lap+': '+d.driver_radio,'d');
+ if(d.sc||d.cliff_alarm||(d.rec&&d.rec.box_now)||d.driver_radio)log('L'+d.lap+' PITWALL: '+d.radio_call);
+ draw()}
+$('go').onclick=()=>{if(ws)ws.close();H=[];$('log').innerHTML='';$('plans').innerHTML='';
+ const p=location.protocol==='https:'?'wss':'ws';
+ ws=new WebSocket(`${p}://${location.host}/ws/live?seed=${$('seed').value}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
+ ws.onopen=()=>$('status').textContent='connecting';
+ ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='hello'){$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}
+  else if(d.type==='lap')onLap(d);else if(d.type==='done'){$('status').textContent='finished';$('status').className='badge'}};
+ ws.onclose=()=>{if($('status').textContent==='live')$('status').textContent='closed'}};
+const send=()=>{const t=$('msg').value.trim();if(t&&ws&&ws.readyState===1){ws.send(JSON.stringify({radio:t}));log('DRIVER (queued): '+t,'d');$('msg').value=''}};
+$('send').onclick=send;$('msg').onkeydown=e=>{if(e.key==='Enter')send()};
+addEventListener('resize',draw);
+</script>
+</body>
+</html>

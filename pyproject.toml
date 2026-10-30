@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pitwall-ai"
+version = "0.1.0"
+description = "Real-time F1 race-strategy engine: tyre-degradation learning, Monte Carlo pit optimisation, safety-car hazard model and a tool-using LLM race engineer."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+f1 = ["fastf1>=3.4", "pandas>=2.0"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+pitwall-serve = "pitwall.api.server:main"
+pitwall-backtest = "pitwall.evaluation.backtest:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"pitwall.api" = ["static/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
