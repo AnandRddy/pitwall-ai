@@ -59,7 +59,7 @@ Reading it honestly: the adaptive policy's edge comes from exploiting safety car
 - **Reality is synthetic.** The backtest world is a physically structured simulator (`physics.py`), not real timing data. Gains are demonstrated against a hidden-truth simulator with model mismatch, not against real races. A FastF1 loader is included but real-race backtesting is not done yet.
 - Single-car optimisation: rivals are only modelled in the undercut module, not in a full multi-agent race simulation. No traffic or dirty-air model in the main search.
 - Tyre age does not advance behind the safety car; no inters/wets; no virtual safety car; SC length is assumed 3-5 laps.
-- The LLM path has not been exercised against the live API in CI (it needs a key); the tool layer it calls is tested.
+- The Claude engineer has been run live against the dashboard manually (see screenshot), but not in CI since it needs an API key; the tool layer it calls is covered by tests.
 
 ## Roadmap
 
