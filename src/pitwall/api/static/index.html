@@ -109,12 +109,12 @@ $('go').onclick=()=>{$('status').textContent='loading...';if(ws)ws.close();H=[];
  const p=location.protocol==='https:'?'wss':'ws';
  const real=$('src').value==='real';
  const q=real?`year=${$('year').value}&gp=${encodeURIComponent($('gp').value)}&driver=${encodeURIComponent($('drv').value.toUpperCase())}`:`seed=${$('seed').value}`;
- ws=new WebSocket(`${p}://${location.host}/ws/live?${q}&start=${parseInt($('startlap').value)||1}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
- ws.onopen=()=>$('status').textContent='connecting';
- ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='error'){$('status').textContent='error';$('call').textContent=d.message;return}
-  if(d.type==='hello'){$('srcb').textContent=d.source+' | driver '+d.driver;ME=d.driver;OUT=d.outline;FR=null;$('mapnote').textContent=d.outline?'(real GPS, red = your car, gold = leader)':'(GPS only for real races)';$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}
+ const sock=ws=new WebSocket(`${p}://${location.host}/ws/live?${q}&start=${parseInt($('startlap').value)||1}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
+ sock.onopen=()=>$('status').textContent='connecting';
+ sock.onmessage=e=>{if(sock!==ws)return;const d=JSON.parse(e.data);if(d.type==='error'){$('status').textContent='error';$('call').textContent=d.message;return}
+  if(d.type==='hello'){$('srcb').textContent=d.source+' | driver '+d.driver;ME=d.driver;OUT=d.outline;FR=null;ORDER=[];$('mapnote').textContent=d.outline?'(real GPS, red = your car, gold = leader)':(d.source==='simulator'?'(GPS only for real races)':'(GPS unavailable for this race: '+(d.gps_error||'not loaded')+')');$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}
   else if(d.type==='lap')onLap(d);else if(d.type==='done'){$('status').textContent='finished';$('status').className='badge'}};
- ws.onclose=()=>{if($('status').textContent==='live')$('status').textContent='closed'}};
+ sock.onclose=()=>{if(sock===ws&&$('status').textContent==='live')$('status').textContent='closed'}};
 const send=()=>{const t=$('msg').value.trim();if(t&&ws&&ws.readyState===1){ws.send(JSON.stringify({radio:t}));log('DRIVER (queued): '+t,'d');$('msg').value=''}};
 $('send').onclick=send;$('msg').onkeydown=e=>{if(e.key==='Enter')send()};
 addEventListener('resize',draw);

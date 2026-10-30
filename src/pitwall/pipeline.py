@@ -23,7 +23,7 @@ class ReplaySession:
                  year: int | None = None, gp: str | None = None):
         self.driver, self.rain, self.fast = driver, rain, fast
         self.real, self.shift, self.source = year is not None, 0.0, "simulator"
-        self.track_data = None
+        self.track_data, self.gps_error = None, None
         if self.real:
             self._init_real(year, gp, driver)
         else:
@@ -60,11 +60,15 @@ class ReplaySession:
         self.rain = 0.7 if meta.wet else self.rain
         self.brain = StrategyBrain(self.track, LapTable.empty(), driver, prior=prior)
         self.meta = meta
-        try:   # GPS track map is a nice-to-have: the strategy feed must work without it
-            from .data.positions import load_track
-            self.track_data = load_track(meta) if meta.lap_starts else None
-        except Exception:
-            self.track_data = None
+        self.gps_error = None
+        for attempt in range(2):   # GPS map is a nice-to-have: the strategy feed must work without it
+            try:
+                from .data.positions import load_track
+                self.track_data = load_track(meta) if meta.lap_starts else None
+                self.gps_error = None if self.track_data else "no lap timeline"
+                break
+            except Exception as e:
+                self.track_data, self.gps_error = None, f"{type(e).__name__}"
 
     @property
     def done(self) -> bool:

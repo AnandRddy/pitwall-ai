@@ -47,6 +47,8 @@ Optional: `pip install -e ".[llm]"` and set `ANTHROPIC_API_KEY` for the Claude e
 
 The dashboard can replay any 2023-24 race from the open OpenF1 API, lap by lap, as if the data were arriving live:
 
+![Live replay of the 2024 Azerbaijan GP with GPS car positions](docs/live_replay.jpg)
+
 - **Pick a race, year and driver**, and optionally a **start lap** to fast-forward (handy for lining up with a video). The model starts knowing only *earlier* races, then learns each lap as it arrives, so there is no look-ahead except the "safety car deployed" notice a real pit wall receives.
 - **GPS race replay**: all 20 cars animated around the real circuit from OpenF1 position data (your car in red, the leader in gold), in step with the strategy feed.
 - **Race video panel**: paste a YouTube link (e.g. highlights) to watch alongside. The official broadcast is copyrighted, so it is embedded from a link you supply, not downloaded; it is not lap-synced.

@@ -73,7 +73,8 @@ async def live(ws: WebSocket, seed: int = 7, speed: float = 2.0, rain: float = 0
     fallback = RuleEngineer()
     await ws.send_json({"type": "hello", "llm": llm, "track": session.track.name, "laps": session.track.laps,
                         "source": session.source, "driver": session.driver, "drivers": session.race.drivers,
-                        "outline": session.track_data.outline if session.track_data else None})
+                        "outline": session.track_data.outline if session.track_data else None,
+                        "gps_error": session.gps_error})
     pending: list[str] = []
 
     async def listen():
