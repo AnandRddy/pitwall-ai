@@ -62,3 +62,17 @@ def test_unseen_compound_does_not_look_free():
     m = TyreDegModel().fit(prac.mask(keep))
     assert m.max_seen[1] == 0
     assert m.curves[1][10] > m.curves[0][10] - 0.2  # not magically faster than a soft
+
+
+def test_track_frames_interpolate_car_positions_inside_a_lap():
+    import numpy as np
+    from pitwall.data.positions import TrackData
+    t = np.array([0.0, 10.0, 20.0])
+    td = TrackData([[0, 0], [10, 0]], {"AAA": (t, np.array([0.0, 100.0, 200.0]), np.array([0.0, 0.0, 50.0])),
+                                       "BBB": (np.array([0.0]), np.array([1.0]), np.array([1.0]))})
+    fr = td.frames(0.0, 20.0, 4)             # instants at 2.5, 7.5, 12.5, 17.5 s
+    assert set(fr) == {"AAA"}                  # cars with <2 samples are skipped
+    assert [p[0] for p in fr["AAA"]] == [25, 75, 125, 175]
+    assert len(fr["AAA"]) == 4
+    again = TrackData.from_json(td.to_json()).frames(0.0, 20.0, 4)
+    assert again == fr                         # cache round-trip is lossless

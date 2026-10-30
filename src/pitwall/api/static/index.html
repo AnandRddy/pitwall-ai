@@ -52,6 +52,12 @@ th{color:var(--mut);font-weight:500;font-size:12px}tr.best td{color:var(--grn);f
   <div class="card kpi"><div class="v" id="res">-</div><div class="l">PACE vs MODEL</div></div>
   <div class="card kpi"><div class="v" id="scp">-</div><div class="l">SC RISK (5 LAPS)</div></div>
 
+  <div class="card w6"><h2>Race replay: live GPS positions <span id="mapnote" style="text-transform:none;letter-spacing:0"></span></h2>
+    <canvas id="map" style="height:300px"></canvas></div>
+  <div class="card w6"><h2>Race video <span style="text-transform:none;letter-spacing:0">paste a YouTube link (e.g. official highlights); it plays alongside but is not lap-synced</span></h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px"><input id="vurl" placeholder="https://www.youtube.com/watch?v=..." style="flex:1"><button id="vgo">Load</button></div>
+    <div id="vbox" style="aspect-ratio:16/9;background:#000;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--mut)">No video loaded</div></div>
+
   <div class="card w12"><h2>Pit wall call</h2><div class="call" id="call">Press start to begin the replay.</div></div>
 
   <div class="card w6"><h2>Lap time: actual vs model</h2><canvas id="c1"></canvas></div>
@@ -85,7 +91,7 @@ function draw(){
  const L=H[H.length-1];if(!L)return;const ser=Object.keys(L.curves).map(k=>({pts:L.curves[k].map((v,i)=>[i,v]).slice(1),c:COL[k]}));
  chart($('c2'),ser,{y0:0,pad:.5});}
 function log(t,c=''){const d=document.createElement('div');d.className=c;d.textContent=t;$('log').prepend(d)}
-function onLap(d){H.push(d);$('lap').textContent=d.lap+'/'+d.total;$('pos').textContent='P'+d.position;
+function onLap(d){H.push(d);if(d.frames){FR=d.frames;ORDER=d.order||[];FSTART=performance.now();FDUR=1000/Math.max(parseFloat($('speed').value),0.1)*0.98}$('lap').textContent=d.lap+'/'+d.total;$('pos').textContent='P'+d.position;
  $('tyre').innerHTML='<span class="dot" style="background:'+COL[d.compound]+'"></span>'+d.compound[0]+' '+d.tyre_age;
  $('gap').textContent=d.gap_ahead==null?'-':d.gap_ahead.toFixed(1)+'s';
  $('res').textContent=(d.residual>=0?'+':'')+d.residual.toFixed(2)+'s';$('res').style.color=d.residual>.4?css('--red'):'';
@@ -105,12 +111,34 @@ $('go').onclick=()=>{$('status').textContent='loading...';if(ws)ws.close();H=[];
  ws=new WebSocket(`${p}://${location.host}/ws/live?${q}&speed=${$('speed').value}&rain=${$('rain').checked?0.7:0}`);
  ws.onopen=()=>$('status').textContent='connecting';
  ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='error'){$('status').textContent='error';$('call').textContent=d.message;return}
-  if(d.type==='hello'){$('srcb').textContent=d.source+' | driver '+d.driver;$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}
+  if(d.type==='hello'){$('srcb').textContent=d.source+' | driver '+d.driver;ME=d.driver;OUT=d.outline;FR=null;$('mapnote').textContent=d.outline?'(real GPS, red = your car, gold = leader)':'(GPS only for real races)';$('eng').textContent=d.llm?'Claude engineer':'rule engineer';$('eng').className='badge'+(d.llm?' on':'');$('status').textContent='live';$('status').className='badge on'}
   else if(d.type==='lap')onLap(d);else if(d.type==='done'){$('status').textContent='finished';$('status').className='badge'}};
  ws.onclose=()=>{if($('status').textContent==='live')$('status').textContent='closed'}};
 const send=()=>{const t=$('msg').value.trim();if(t&&ws&&ws.readyState===1){ws.send(JSON.stringify({radio:t}));log('DRIVER (queued): '+t,'d');$('msg').value=''}};
 $('send').onclick=send;$('msg').onkeydown=e=>{if(e.key==='Enter')send()};
 addEventListener('resize',draw);
+
+// ---- GPS race replay -------------------------------------------------------------
+let OUT=null,FR=null,FSTART=0,FDUR=1000,ORDER=[],ME='';
+function mapBox(){const xs=OUT.map(p=>p[0]),ys=OUT.map(p=>p[1]);return{x0:Math.min(...xs),x1:Math.max(...xs),y0:Math.min(...ys),y1:Math.max(...ys)}}
+function drawMap(now){requestAnimationFrame(drawMap);const cv=$('map');if(!OUT||!cv.clientWidth)return;
+ const r=devicePixelRatio||1,w=cv.clientWidth,h=300;if(cv.width!==w*r){cv.width=w*r;cv.height=h*r}
+ const g=cv.getContext('2d');g.setTransform(r,0,0,r,0,0);g.clearRect(0,0,w,h);
+ const b=mapBox(),pad=18,s=Math.min((w-2*pad)/(b.x1-b.x0),(h-2*pad)/(b.y1-b.y0)),ox=(w-(b.x1-b.x0)*s)/2,oy=(h-(b.y1-b.y0)*s)/2;
+ const P=p=>[ox+(p[0]-b.x0)*s,h-oy-(p[1]-b.y0)*s];
+ g.strokeStyle=css('--line');g.lineWidth=7;g.lineJoin='round';g.beginPath();OUT.forEach((p,i)=>{const q=P(p);i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});g.closePath();g.stroke();
+ if(!FR)return;const codes=Object.keys(FR),n=FR[codes[0]].length,u=Math.min(Math.max((now-FSTART)/FDUR,0),1)*(n-1),i=Math.floor(u),f=u-i,j=Math.min(i+1,n-1);
+ g.font='11px sans-serif';
+ const draw=(c,col,rad,label)=>{const a=FR[c][i],d=FR[c][j],q=P([a[0]+(d[0]-a[0])*f,a[1]+(d[1]-a[1])*f]);g.fillStyle=col;g.beginPath();g.arc(q[0],q[1],rad,0,7);g.fill();if(label){g.fillStyle='#e8ecf3';g.fillText(c,q[0]+rad+3,q[1]+4)}};
+ codes.forEach(c=>{if(c!==ME)draw(c,ORDER[0]===c?'#ffd23f':'#8a93a6',3.5,ORDER.indexOf(c)<3)});
+ if(FR[ME])draw(ME,'#ff2e3b',6,true)}
+requestAnimationFrame(drawMap);
+// ---- video panel -------------------------------------------------------------------
+function ytId(u){const m=u.match(/(?:youtu\.be\/|v=|embed\/)([\w-]{11})/);return m&&m[1]}
+$('vgo').onclick=()=>{const id=ytId($('vurl').value.trim());if(!id){$('vbox').textContent='Not a valid YouTube link';return}
+ $('vbox').innerHTML='<iframe width="100%" height="100%" style="border:0" src="https://www.youtube-nocookie.com/embed/'+id+'" allow="accelerometer;encrypted-media;picture-in-picture;fullscreen" allowfullscreen></iframe>';
+ try{localStorage.setItem('pw_video',$('vurl').value)}catch(e){}};
+try{const v=localStorage.getItem('pw_video');if(v){$('vurl').value=v}}catch(e){}
 </script>
 </body>
 </html>

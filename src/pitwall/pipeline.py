@@ -23,6 +23,7 @@ class ReplaySession:
                  year: int | None = None, gp: str | None = None):
         self.driver, self.rain, self.fast = driver, rain, fast
         self.real, self.shift, self.source = year is not None, 0.0, "simulator"
+        self.track_data = None
         if self.real:
             self._init_real(year, gp, driver)
         else:
@@ -58,6 +59,12 @@ class ReplaySession:
         self.shift, self.source = meta.real_base_lap - 90.0, f"OpenF1 {meta.name} {meta.year}"
         self.rain = 0.7 if meta.wet else self.rain
         self.brain = StrategyBrain(self.track, LapTable.empty(), driver, prior=prior)
+        self.meta = meta
+        try:   # GPS track map is a nice-to-have: the strategy feed must work without it
+            from .data.positions import load_track
+            self.track_data = load_track(meta) if meta.lap_starts else None
+        except Exception:
+            self.track_data = None
 
     @property
     def done(self) -> bool:
@@ -104,6 +111,11 @@ class ReplaySession:
                    "cliff_alarm": alarm, "compound": COMPOUNDS[c] if c >= 0 else "UNKNOWN", "tyre_age": a, "sc": bool(r.sc[j]),
                    "pitted": bool(r.pit_in[i, j]), "gap_ahead": state.gap_ahead, "gap_behind": state.gap_behind,
                    "curves": self.brain.curves(), "ours_next": None}
+        if self.track_data is not None:
+            ls = self.meta.lap_starts
+            t1 = ls[lap] if lap < len(ls) else self.meta.race_end
+            payload["frames"] = self.track_data.frames(ls[lap - 1], t1, 20)
+            payload["order"] = [r.drivers[k] for k in np.argsort(r.position[:, j])]
         if not self.done:
             rec = self.brain.recommend(state, n_scenarios=250, top_k=14, max_stops=2 if lap > 20 else 3,
                                        refine=False, seed=lap)

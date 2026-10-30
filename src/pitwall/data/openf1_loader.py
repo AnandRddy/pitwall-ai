@@ -12,12 +12,14 @@ profile; cumulative time / positions are rebuilt from lap durations.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -30,10 +32,12 @@ CACHE = Path(".openf1-cache")
 _last_call = [0.0]
 
 
-def _get(endpoint: str, **params):
-    q = urllib.parse.urlencode(params)
-    key = CACHE / (endpoint + "_" + "_".join(f"{k}-{v}" for k, v in sorted(params.items())) + ".json")
-    if key.exists():
+def _get(endpoint: str, _raw: str = "", _cache: bool = True, **params):
+    """GET with on-disk caching. `_raw` is appended verbatim (for OpenF1's `date>=` style filters)."""
+    q = urllib.parse.urlencode(params) + (("&" + _raw) if _raw else "")
+    tag = ("_" + hashlib.md5(_raw.encode()).hexdigest()[:8]) if _raw else ""
+    key = CACHE / (endpoint + "_" + "_".join(f"{k}-{v}" for k, v in sorted(params.items())) + tag + ".json")
+    if _cache and key.exists():
         return json.loads(key.read_text())
     url = f"{API}/{endpoint}?{q}"
     for attempt in range(6):
@@ -54,8 +58,9 @@ def _get(endpoint: str, **params):
                 time.sleep(2 ** attempt)
                 continue
             raise
-    CACHE.mkdir(exist_ok=True)
-    key.write_text(json.dumps(data))
+    if _cache:
+        CACHE.mkdir(exist_ok=True)
+        key.write_text(json.dumps(data))
     return data
 
 
@@ -70,6 +75,10 @@ class RaceMeta:
     vsc_deployments: list[int] = field(default_factory=list)
     n_laps: int = 0
     real_base_lap: float = 90.0   # circuit's real median green lap (s); Race lap times are shifted to 90
+    lap_starts: list[float] = field(default_factory=list)   # epoch seconds each winner lap began
+    race_end: float = 0.0
+    winner_code: str = ""
+    driver_numbers: dict = field(default_factory=dict)       # code -> car number
 
     @property
     def usable(self) -> bool:
@@ -178,4 +187,20 @@ def _build(session: dict):
         cum[i, last + 1:] = 1e9
     position = np.argsort(np.argsort(cum, axis=0), axis=0) + 1
     fuel = np.tile([track.fuel_at(l) for l in range(1, n_laps + 1)], (len(nums), 1))
+
+    # timeline of the winner's laps (reference clock for the GPS track map)
+    w = int(np.argmin(position[:, -1]))
+    meta.winner_code, meta.driver_numbers = names[w], {c: n for c, n in zip(names, nums)}
+    starts = {r["lap_number"]: r.get("date_start") for r in laps if r["driver_number"] == nums[w]}
+    ls, prev = [], None
+    for lap in range(1, n_laps + 1):
+        iso = starts.get(lap)
+        if iso:
+            prev = datetime.fromisoformat(iso).timestamp()
+        elif prev is not None:
+            prev = prev + float(filled[w, lap - 2])
+        ls.append(prev)
+    if all(v is not None for v in ls):
+        meta.lap_starts = ls
+        meta.race_end = ls[-1] + float(filled[w, -1])
     return Race(track, names, lap_time, comp, age, fuel, pit_in, sc, position, cum), meta
